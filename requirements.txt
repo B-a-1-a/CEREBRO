@@ -1,0 +1,14 @@
+torch
+torchvision
+transformers==4.44.0
+mne==1.7.1
+numpy
+scipy
+scikit-learn
+pandas
+matplotlib
+seaborn
+tqdm
+einops
+h5py
+pyyaml
