@@ -427,3 +427,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Claude Code agent memory / local artifacts
+.claude/
+MEMORY.md
