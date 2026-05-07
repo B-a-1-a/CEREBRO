@@ -1,0 +1,175 @@
+---
+title: "CEREBRO: A Subject-Conditioned Transformer for Visual EEG Encoding"
+subtitle: "Foundation-model image embeddings and cross-hardware transfer to consumer-grade EEG"
+author: "Longjin Che, Ian Gloege, Bala Shukla, and Rishav Roy"
+date: ""
+format:
+  pdf:
+    documentclass: article
+    geometry: "margin=0.82in"
+    fontsize: 10pt
+    linestretch: 1.02
+    number-sections: true
+    colorlinks: true
+    link-citations: true
+    fig-pos: H
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{float}
+        \usepackage{caption}
+        \captionsetup{font=small,labelfont=bf}
+        \usepackage{microtype}
+        \usepackage{amsmath}
+        \usepackage{array}
+        \usepackage{longtable}
+        \usepackage{graphicx}
+execute:
+  echo: false
+  warning: false
+  message: false
+bibliography: references.bib
+citeproc: true
+number-sections: true
+---
+
+```{python}
+#| label: setup
+#| include: false
+from pathlib import Path
+import sys
+
+# The QMD is designed to live in report/, with results/, logs/, figures/, and
+# embeddings/ as sibling directories. This setup also works if Quarto is invoked
+# from the project root via `quarto render report/writeup.qmd`.
+cwd = Path.cwd().resolve()
+for candidate in (cwd, cwd / "report", cwd.parent / "report"):
+    if (candidate / "report_metrics.py").exists():
+        sys.path.insert(0, str(candidate))
+        break
+
+from report_metrics import (
+    compute_report_context,
+    fmt_int,
+    render_ablation_text,
+    render_artifact_note,
+    render_main_results_text,
+    render_main_table,
+    render_transfer_table,
+    render_transfer_text,
+)
+
+project_root = cwd.parent if (cwd.parent / "results").exists() else cwd
+ctx = compute_report_context(project_root)
+shapes = ctx["shapes"]
+```
+
+# Introduction
+
+Our project asks whether pretrained foundation-model image embeddings can be used to predict time-resolved human EEG responses to natural images. The original proposal targeted multimodal prediction of peripheral physiological signals, especially heart-rate and electrodermal activity, from AMIGOS-style video/audio stimuli [@amigos], using encoders such as VideoMAE and CLAP for video and audio [@videomae; @clap]. During implementation, we pivoted to a narrower but closely related neural-encoding problem: visual EEG prediction from THINGS-EEG2 and transfer to the lower-cost Alljoined-1.6M EEG corpus. This pivot keeps the central scientific question - whether pretrained representations encode latent stimulus structure that aligns with biological responses - while making the two-month project feasible with the datasets and compute available.
+
+The final hypothesis is:
+
+> A subject-conditioned transformer trained jointly across multiple subjects, using fixed pretrained visual embeddings, will predict image-evoked EEG more accurately than per-subject or linear baselines. If the learned encoder captures stimulus-locked neural structure rather than only dataset-specific artifacts, then a frozen THINGS-EEG2 encoder should also transfer to consumer-grade Alljoined EEG after only lightweight subject-head adaptation.
+
+This hypothesis is motivated by TRIBE v2, which frames brain modeling as an encoding problem and uses a tri-modal foundation model to predict fMRI responses to sight, sound, and language [@tribev2]. We test a smaller, EEG-specific analogue: can multi-subject pooling and a subject-specific readout help in the high-temporal-resolution, low signal-to-noise setting of event-related EEG? The main architectural addition is an RSVP context window: each target image response is predicted from the target image embedding plus the five preceding and five following image embeddings, allowing the model to condition on local temporal context in the rapid serial visual presentation paradigm.
+
+# Related Work
+
+**Foundation-model encoding of brain activity.** TRIBE v2 shows how pretrained multimodal representations can be mapped to brain activity while using subject-specific components to account for individual variation [@tribev2]. Our work adopts this logic but changes the measurement regime from slow, spatially rich fMRI to fast, noisier EEG. This makes the project a useful stress test for whether multi-subject foundation-model features help outside the original fMRI setting.
+
+**Large-scale visual EEG datasets.** THINGS-EEG2 is a standard benchmark for modeling visual object recognition from EEG. It contains 10 participants, 82,160 trials per participant, and 16,740 image conditions, enabling image-level train/test splits and repeated-trial averaging [@thingseeg2]. Alljoined-1.6M was designed as a lower-cost companion dataset: it records visual RSVP EEG from 20 participants using a 32-channel consumer-grade EMOTIV FLEX2 system and uses the same stimulus family, which makes it unusually well suited for cross-hardware transfer experiments [@alljoined].
+
+**Pretrained visual embeddings.** We compare CLIP ViT-L/14 and DINOv2-Large. CLIP learns visual features through image-text contrastive supervision and has strong zero-shot semantic transfer [@clip]. DINOv2 learns general-purpose image features without labels and is a strong self-supervised vision baseline [@dinov2]. The comparison is scientifically useful: if CLIP wins, the relevant EEG signal may be more semantic/category-like; if DINOv2 wins, the signal may be more low-level or perceptual.
+
+**Robust multimodal physiological modeling.** ADAPT studies physiological-change detection under missing modalities by aligning modalities to an anchor representation and using a masked multimodal transformer [@adapt]. We did not implement ADAPT's full multimodal setup, but it influenced two design choices: treating the strongest available representation as an anchor, and using dropout/null pathways to make the model robust when subject identity or sensor format differs at transfer time. Other brainstormed directions, such as ARC-AGI-style reasoning, quantization, and world-model systems, were less directly connected to the final EEG encoding question and are therefore not treated as core related work.
+
+# Methods
+
+## Data and preprocessing
+
+For THINGS-EEG2, we used preprocessed EEG epochs for 10 subjects. Each training array contains repeated responses to `{python} fmt_int(shapes["clip_train"][0])` training images, and each test array contains repeated responses to `{python} fmt_int(shapes["clip_test"][0])` held-out test images. We excluded the stimulus marker channel, averaged over repeated presentations, and modeled the remaining EEG as a channel-by-time matrix. For the full THINGS-EEG2 experiments this produced `{python} shapes["things_r_per_ct"][0]` EEG channels and `{python} shapes["things_r_per_ct"][1]` time samples per image. The prediction target for a subject and image is therefore $Y \in \mathbb{R}^{C \times T}$.
+
+Image features were extracted once and kept fixed. We used CLIP ViT-L/14 embeddings with dimension `{python} shapes["clip_train"][1]` and DINOv2-Large CLS embeddings with dimension `{python} shapes["dinov2_train"][1]`. The attached embeddings have shapes `{python} shapes["clip_train"]` and `{python} shapes["clip_test"]` for CLIP, and `{python} shapes["dinov2_train"]` and `{python} shapes["dinov2_test"]` for DINOv2, matching the train/test image counts. We also used a concept-level 90/10 train/validation split, so no image concept appears in both training and validation.
+
+For Alljoined transfer, we used the first `{python} ctx["transfer"]["ridge"]["n"]` available Alljoined subjects. We averaged repeated trials per image, cropped the post-stimulus window, resampled to `{python} shapes["alljoined_r_per_ct"][1]` post-stimulus timepoints, reordered channels to the `{python} shapes["alljoined_r_per_ct"][0]`-channel intersection with THINGS-EEG2, and prepended a zero baseline so the input shape matched the THINGS-EEG2 model's time dimension. All Alljoined correlations reported below are computed only on the post-stimulus timepoints.
+
+## Channel spaces
+
+The project uses three channel configurations, which must be distinguished carefully. First, the main THINGS-EEG2 model uses the 63 EEG channels available after removing the marker channel. Second, an exploratory 28-channel visual/posterior-heavy mask improves in-domain THINGS-EEG2 performance by focusing capacity on visually responsive sensors. Third, cross-hardware transfer uses the true 32-channel THINGS-EEG2/Alljoined intersection: Cz, FCz, AFz, Fp1/2, F1/2/5/6, CP1/2/3/4/5/6, P1/2/3/4/5/6/7/8/Pz, PO3/4/7/8/POz, and O1/O2/Oz. Only the 32-channel intersection model is used for the Alljoined transfer results.
+
+## Models
+
+All transformer models use a frozen image embedding followed by a learned projection to $d=384$, learned positional embeddings over an 11-token context, and four pre-norm transformer encoder layers with six attention heads [@transformer]. The context contains the target image token plus five previous and five following image tokens, with zero-padding at sequence boundaries.
+
+The multi-subject model uses a shared transformer backbone and a subject-indexed linear readout. Let $h \in \mathbb{R}^{384}$ be the target-token transformer output. The prediction for subject $s$ is
+
+$$
+\hat{Y}_{s} = \operatorname{reshape}(W_s h + b_s, C, T),
+$$
+
+where $W \in \mathbb{R}^{(N+1) \times CT \times 384}$ and $b \in \mathbb{R}^{(N+1) \times CT}$. The final block, index $N$ under zero-based indexing, is a null-subject pathway sampled with probability 0.1 during training. This subject dropout is intended to make the backbone usable for unseen subjects. We compare against two baselines: a per-subject transformer with the same general form but no cross-subject pooling, and a per-subject linear regression head from image embedding directly to flattened EEG.
+
+## Training and evaluation
+
+Models were trained with AdamW, learning rate $10^{-4}$ for the transformer experiments, weight decay 0.01, cosine scheduling with warmup, batch size 64, and early stopping on validation Pearson correlation. The main CLIP multi-subject result averages three independent random seeds: `{python} ", ".join(ctx["things"]["seed_variants"])`. The main metric is Pearson correlation between predicted and observed EEG, computed per channel-time cell over the held-out test images and then averaged over cells and subjects. For Alljoined, we report both all-cell correlation and posterior-channel correlation; posterior correlation is the transfer headline because visual responses are strongest over parietal/occipital sensors.
+
+For cross-hardware transfer, we initialized from the 32-channel THINGS-EEG2 intersection model and compared four Alljoined protocols: scratch ridge regression from CLIP embeddings, Variant A zero-shot prediction through the null-subject pathway, Variant B frozen-encoder subject-block fine-tuning, and Variant C full fine-tuning for one epoch. Variant B trains only a fresh subject readout block initialized from the mean THINGS-EEG2 subject block.
+
+# Results
+
+## Multi-subject pooling improves THINGS-EEG2 prediction
+
+```{python}
+#| label: main-results-text
+#| output: asis
+print(render_main_results_text(ctx))
+```
+
+```{python}
+#| label: main-results-table
+#| output: asis
+print(render_main_table(ctx))
+```
+
+```{python}
+#| label: ablation-text
+#| output: asis
+print(render_ablation_text(ctx))
+```
+
+![Multi-subject CLIP outperforms linear and per-subject baselines on THINGS-EEG2.](../figures/headline_boxplot.png){#fig-headline width="68%"}
+
+![Channel-by-time correlation heatmap for the multi-subject CLIP model. The plotted color scale is clipped to emphasize spatial-temporal structure; the highest individual cells exceed the top of the color bar.](../figures/channel_time_heatmap.png){#fig-heatmap width="78%"}
+
+![Embedding ablation: CLIP outperforms DINOv2 for this visual EEG encoding task.](../figures/embedding_ablation.png){#fig-embedding width="60%"}
+
+## Frozen-encoder subject-head adaptation transfers to Alljoined
+
+```{python}
+#| label: transfer-text
+#| output: asis
+print(render_transfer_text(ctx))
+```
+
+```{python}
+#| label: transfer-table
+#| output: asis
+print(render_transfer_table(ctx))
+```
+
+The most conservative interpretation is that the transfer result is promising but not yet definitive. Variant B is about four times the ridge baseline in mean posterior correlation, but the sample size is small, and several transfer variants were explored. Therefore, the result should be treated as evidence that the learned encoder may transfer across hardware, not as a final claim about consumer-grade BCI reliability.
+
+![Cross-hardware transfer to Alljoined. Variant B is the strongest protocol, but the small subject count makes the result preliminary.](../figures/alljoined_transfer.png){#fig-transfer width="82%"}
+
+# Discussion, Conclusions, and Future Work
+
+The results support the main hypothesis on THINGS-EEG2: a subject-conditioned multi-subject transformer substantially outperforms both a linear baseline and a per-subject transformer. This is the clearest success of the project and directly addresses the course goal of extending ideas from foundation-model neural encoding into a new setting. The results also partially support the transfer hypothesis: frozen-encoder subject-head fine-tuning improves over scratch ridge on the first few Alljoined subjects, but this conclusion is limited by sample size and should be replicated on all 20 subjects.
+
+The project also clarified what did not work. The per-subject transformer did not improve over linear regression, which suggests that architectural capacity alone is not helpful without enough subject-specific data. Full fine-tuning on Alljoined was unstable, probably because updating the entire encoder on one subject can overfit quickly. Finally, the original ECG/EDA multimodal goal was not completed; the final contribution is instead a focused EEG encoding and transfer study. This should be presented as a deliberate scope change, not as completed AMIGOS peripheral-physiology work.
+
+Several future directions follow naturally. First, the Alljoined experiment should be extended from five to all twenty subjects, with a pre-registered choice of the posterior-channel metric. Second, full fine-tuning should use a validation split, early stopping, and lower-rank adaptation rather than one unconditional epoch. Third, the model should be compared with stronger spatiotemporal baselines, such as regularized temporal response functions or MNE-style encoding models. Fourth, the original multimodal motivation could be revisited by adding audio/video features and physiological targets from AMIGOS, using ADAPT-like missing-modality training for robustness [@adapt].
+
+In conclusion, the current work is not the original AMIGOS heart-rate/EDA project, but it is a coherent and completed final project in the same broad class area. It studies how pretrained representations align with human biological responses, develops a subject-conditioned transformer architecture for EEG, evaluates the hypothesis against baselines, and provides preliminary evidence for cross-hardware transfer to a cheaper EEG device.
+
+# References
