@@ -1,39 +1,45 @@
 # Render instructions
 
-Place these files in the existing `report/` directory, where `report/` is a sibling of `figures/`, `results/`, `logs/`, and `embeddings/`.
+`report/writeup.qmd` is designed to live in `report/`, with `figures/`, `results/`, `logs/`, and `embeddings/` as sibling directories at the project root:
 
-Recommended command from the project root:
+```text
+CEREBRO/
+  report/
+    writeup.qmd
+    references.bib
+    report_metrics.py
+  figures/
+  results/
+  logs/
+  embeddings/
+```
+
+Render from the project root with:
 
 ```bash
 quarto render report/writeup.qmd --to pdf
 ```
 
-or from inside `report/`:
+or from inside `report/` with:
 
 ```bash
 quarto render writeup.qmd --to pdf
 ```
 
-The QMD computes the reported result values at render time via `report_metrics.py`. It reads:
+The QMD computes the reported result values at render time via `report_metrics.py`. The helper intentionally avoids pandas, SciPy, and mpmath as required dependencies. It uses `numpy` for loading `.npy` files and a small pure-Python Student-t calculation for paired-test p-values, so p-values should not render as `NA` on minimal Quarto installations.
 
-- `../results/all_results.csv`
-- `../results/alljoined_transfer.csv`
-- `../logs/phase5/multi_subject_clip_chsubset32_seed42.status.json`
-- `../embeddings/*.npy`
-- selected `../results/**/*.npy` files for shape checks
+## Minimal report artifacts
 
-The helper intentionally avoids pandas, SciPy, and mpmath as required dependencies. It uses `numpy` for loading `.npy` files and a small pure-Python Student-t calculation for paired-test p-values, so p-values should not render as `NA` on minimal Quarto installations.
-
-
-## Report artifacts
-
-The report is rendered from `report/writeup.qmd`. It expects `report/` to be a sibling of `figures/`, `results/`, `logs/`, and `embeddings/`.
-
-To populate only the minimal artifacts needed for the report from a full `tribe-eeg/` folder, run:
+To populate only the artifacts needed for the report from a full `tribe-eeg/` folder, run this from the repo root:
 
 ```bash
 python scripts/collect_report_artifacts.py --source /path/to/tribe-eeg --dest .
+```
 
-The render:
+To preview what the script will copy without copying anything, run:
 
-quarto render report/writeup.qmd --to pdf
+```bash
+python scripts/collect_report_artifacts.py --source /path/to/tribe-eeg --dest . --list-only
+```
+
+The collector discovers figure dependencies by parsing `report/writeup.qmd`. It discovers result/log/embedding dependencies by importing `required_artifact_paths()` from `report/report_metrics.py`. This keeps the artifact list synchronized with the report and avoids maintaining a separate hardcoded list in the collector script.

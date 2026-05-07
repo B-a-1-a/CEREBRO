@@ -18,6 +18,47 @@ import numpy as np
 
 Row = Dict[str, object]
 
+REPORT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = REPORT_DIR.parent
+RESULTS_DIR = PROJECT_ROOT / "results"
+LOGS_DIR = PROJECT_ROOT / "logs"
+EMBEDDINGS_DIR = PROJECT_ROOT / "embeddings"
+
+ALL_RESULTS_CSV = RESULTS_DIR / "all_results.csv"
+ALLJOINED_TRANSFER_CSV = RESULTS_DIR / "alljoined_transfer.csv"
+CHSUBSET32_STATUS_JSON = LOGS_DIR / "phase5" / "multi_subject_clip_chsubset32_seed42.status.json"
+
+CLIP_TRAIN_NPY = EMBEDDINGS_DIR / "clip_vitl14_training.npy"
+CLIP_TEST_NPY = EMBEDDINGS_DIR / "clip_vitl14_test.npy"
+DINOV2_TRAIN_NPY = EMBEDDINGS_DIR / "dinov2_large_training.npy"
+DINOV2_TEST_NPY = EMBEDDINGS_DIR / "dinov2_large_test.npy"
+
+# Representative per-channel/time arrays used only for shape checks in the prose.
+# Keeping these explicit avoids copying all large per-subject arrays just to render the report.
+THINGS_R_PER_CT_SAMPLE_NPY = RESULTS_DIR / "phase4_r_per_ct_sub-01.npy"
+ALLJOINED_VARIANT_B_SAMPLE_NPY = RESULTS_DIR / "alljoined" / "sub-01_variant_B_r_per_ct.npy"
+
+
+def required_artifact_paths() -> list[Path]:
+    """Return the non-figure artifacts needed to render ``writeup.qmd``.
+
+    The collector script imports this function, while the QMD itself imports
+    ``compute_report_context``. This makes ``report_metrics.py`` the single
+    source of truth for result/log/embedding dependencies and avoids maintaining
+    a second hardcoded list in ``scripts/collect_report_artifacts.py``.
+    """
+    return [
+        ALL_RESULTS_CSV,
+        ALLJOINED_TRANSFER_CSV,
+        CHSUBSET32_STATUS_JSON,
+        CLIP_TRAIN_NPY,
+        CLIP_TEST_NPY,
+        DINOV2_TRAIN_NPY,
+        DINOV2_TEST_NPY,
+        THINGS_R_PER_CT_SAMPLE_NPY,
+        ALLJOINED_VARIANT_B_SAMPLE_NPY,
+    ]
+
 
 def _read_csv(path: Path) -> List[Row]:
     rows: List[Row] = []
@@ -190,8 +231,8 @@ def compute_report_context(root: str | Path = "..") -> Mapping[str, object]:
     logs = root / "logs"
     embeddings = root / "embeddings"
 
-    all_rows = _read_csv(results / "all_results.csv")
-    transfer_rows = _read_csv(results / "alljoined_transfer.csv")
+    all_rows = _read_csv(root / ALL_RESULTS_CSV.relative_to(PROJECT_ROOT))
+    transfer_rows = _read_csv(root / ALLJOINED_TRANSFER_CSV.relative_to(PROJECT_ROOT))
 
     main_seed_variants = sorted(
         v for v in {str(r["variant"]) for r in all_rows}
@@ -202,7 +243,7 @@ def compute_report_context(root: str | Path = "..") -> Mapping[str, object]:
     per_subject = _by_subject(all_rows, "per_subject_clip_rescue_seed42")
     dinov2 = _by_subject(all_rows, "multi_subject_dinov2_seed42")
     mask28 = _by_subject(all_rows, "multi_subject_clip_chsubset_seed42")
-    ch32 = _status_by_subject(logs / "phase5" / "multi_subject_clip_chsubset32_seed42.status.json")
+    ch32 = _status_by_subject(root / CHSUBSET32_STATUS_JSON.relative_to(PROJECT_ROOT))
 
     def summarize(name: str, values: Mapping[str, float]) -> Mapping[str, object]:
         vals = list(values.values())
@@ -246,12 +287,12 @@ def compute_report_context(root: str | Path = "..") -> Mapping[str, object]:
             incomplete_variants[variant] = subjects
 
     shapes = {
-        "clip_train": tuple(np.load(embeddings / "clip_vitl14_training.npy", mmap_mode="r").shape),
-        "clip_test": tuple(np.load(embeddings / "clip_vitl14_test.npy", mmap_mode="r").shape),
-        "dinov2_train": tuple(np.load(embeddings / "dinov2_large_training.npy", mmap_mode="r").shape),
-        "dinov2_test": tuple(np.load(embeddings / "dinov2_large_test.npy", mmap_mode="r").shape),
-        "things_r_per_ct": tuple(np.load(sorted(results.glob("phase4_r_per_ct_sub-*.npy"))[0], mmap_mode="r").shape),
-        "alljoined_r_per_ct": tuple(np.load(sorted((results / "alljoined").glob("sub-*_variant_B_r_per_ct.npy"))[0], mmap_mode="r").shape),
+        "clip_train": tuple(np.load(root / CLIP_TRAIN_NPY.relative_to(PROJECT_ROOT), mmap_mode="r").shape),
+        "clip_test": tuple(np.load(root / CLIP_TEST_NPY.relative_to(PROJECT_ROOT), mmap_mode="r").shape),
+        "dinov2_train": tuple(np.load(root / DINOV2_TRAIN_NPY.relative_to(PROJECT_ROOT), mmap_mode="r").shape),
+        "dinov2_test": tuple(np.load(root / DINOV2_TEST_NPY.relative_to(PROJECT_ROOT), mmap_mode="r").shape),
+        "things_r_per_ct": tuple(np.load(root / THINGS_R_PER_CT_SAMPLE_NPY.relative_to(PROJECT_ROOT), mmap_mode="r").shape),
+        "alljoined_r_per_ct": tuple(np.load(root / ALLJOINED_VARIANT_B_SAMPLE_NPY.relative_to(PROJECT_ROOT), mmap_mode="r").shape),
     }
 
     return {
