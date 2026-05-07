@@ -170,6 +170,6 @@ The project also clarified what did not work. The per-subject transformer did no
 
 Several future directions follow naturally. First, the Alljoined experiment should be extended from five to all twenty subjects, with a pre-registered choice of the posterior-channel metric. Second, full fine-tuning should use a validation split, early stopping, and lower-rank adaptation rather than one unconditional epoch. Third, the model should be compared with stronger spatiotemporal baselines, such as regularized temporal response functions or MNE-style encoding models. Fourth, the original multimodal motivation could be revisited by adding audio/video features and physiological targets from AMIGOS, using ADAPT-like missing-modality training for robustness [@adapt].
 
-In conclusion, the current work is not the original AMIGOS heart-rate/EDA project, but it is a coherent and completed final project in the same broad class area. It studies how pretrained representations align with human biological responses, develops a subject-conditioned transformer architecture for EEG, evaluates the hypothesis against baselines, and provides preliminary evidence for cross-hardware transfer to a cheaper EEG device.
+In conclusion, the current work studies how pretrained representations align with human biological responses, develops a subject-conditioned transformer architecture for EEG, evaluates the hypothesis against baselines, and provides preliminary evidence for cross-hardware transfer to a cheaper EEG device.
 
 # References
