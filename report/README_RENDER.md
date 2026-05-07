@@ -23,3 +23,17 @@ The QMD computes the reported result values at render time via `report_metrics.p
 - selected `../results/**/*.npy` files for shape checks
 
 The helper intentionally avoids pandas, SciPy, and mpmath as required dependencies. It uses `numpy` for loading `.npy` files and a small pure-Python Student-t calculation for paired-test p-values, so p-values should not render as `NA` on minimal Quarto installations.
+
+
+## Report artifacts
+
+The report is rendered from `report/writeup.qmd`. It expects `report/` to be a sibling of `figures/`, `results/`, `logs/`, and `embeddings/`.
+
+To populate only the minimal artifacts needed for the report from a full `tribe-eeg/` folder, run:
+
+```bash
+python scripts/collect_report_artifacts.py --source /path/to/tribe-eeg --dest .
+
+The render:
+
+quarto render report/writeup.qmd --to pdf
