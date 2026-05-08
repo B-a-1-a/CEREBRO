@@ -12,3 +12,7 @@ tqdm
 einops
 h5py
 pyyaml
+numpy
+pandas
+matplotlib
+jupyter
