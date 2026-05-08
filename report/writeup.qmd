@@ -1,7 +1,7 @@
 ---
-title: "CEREBRO: A Subject-Conditioned Transformer for Visual EEG Encoding"
+title: "CEREBRO: Cross-hardware EEG Representation Encoding with Biometric Response Optimization"
 subtitle: "Foundation-model image embeddings, multi-subject pooling, and cross-hardware transfer to consumer-grade EEG"
-author: "Longjin Che, Ian Gloege, Bala Shukla, and Rishav Roy"
+authors: "Bala Shukla, Ian Gloege, Rishav Roy, and Longjin Che,"
 date: ""
 format:
   pdf:
@@ -63,6 +63,8 @@ project_root = cwd.parent if (cwd.parent / "results").exists() else cwd
 ctx = compute_report_context(project_root)
 shapes = ctx["shapes"]
 ```
+
+![](../demo.png){width="100%"}
 
 # In plain English {.unnumbered}
 
