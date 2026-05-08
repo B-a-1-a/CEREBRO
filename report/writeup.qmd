@@ -1,8 +1,8 @@
 ---
 title: "CEREBRO: Cross-hardware EEG Representation Encoding with Biometric Response Optimization"
-subtitle: "Foundation-model image embeddings, multi-subject pooling, and cross-hardware transfer to consumer-grade EEG"
+subtitle: "Foundation-model image embeddings, multi-subject pooling, and cross-hardware transfer to consumer-grade EEG\n\n[Demo](https://b-a-1-a.github.io/CEREBRO/)   ·   [Code](https://github.com/B-a-1-a/CEREBRO/tree/main)"
 authors: "Bala Shukla, Ian Gloege, Rishav Roy, and Longjin Che,"
-date: "[Demo](https://b-a-1-a.github.io/CEREBRO/) · [Code](https://github.com/B-a-1-a/CEREBRO/tree/main)"
+date: ""
 format:
   pdf:
     documentclass: article
