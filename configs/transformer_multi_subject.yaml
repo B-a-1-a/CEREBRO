@@ -1,0 +1,15 @@
+model: multi_subject_transformer
+embedding: clip_vitl14
+d_emb: 768
+d_model: 384
+n_heads: 6
+n_layers: 4
+ffn_dim: 1536
+context_k: 10
+n_subjects: 10
+lr: 1e-4
+weight_decay: 0.01
+batch_size: 64
+epochs: 30
+early_stopping_patience: 5
+seed: 42

@@ -1,0 +1,6 @@
+model: linear_baseline
+embedding: clip_vitl14
+d_emb: 768
+n_subjects: 10
+loss: mse
+seed: 42
