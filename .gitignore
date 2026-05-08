@@ -354,6 +354,11 @@ paket-files/
 **/__pycache__/
 *.pyc
 
+# Local Python virtual environments
+.venv/
+venv/
+env/
+
 # Cake - Uncomment if you are using it
 #tools/**
 #!tools/packages.config
@@ -427,3 +432,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Claude Code agent memory / local artifacts
+.claude/
+MEMORY.md

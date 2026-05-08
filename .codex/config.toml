@@ -1,0 +1,3 @@
+[mcp_servers.colab-mcp]
+args = ["git+https://github.com/googlecolab/colab-mcp"]
+command = "uvx"
